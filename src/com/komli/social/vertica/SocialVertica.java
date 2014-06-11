@@ -40,6 +40,7 @@ public class SocialVertica {
 	public int media_type;
 	public int fold_position;
 	public int is_learning;
+	//public long fb_adgroup_id;
 	
 	//Any variable which needs to be inserted into vertica has to be added with exactly the "same variable name"
 	//as shown below; The prepare statment is formed on the basis of these variables.
@@ -51,9 +52,8 @@ public class SocialVertica {
 	
 	//private static ArrayList<String> varBindOrder=new ArrayList<String>(Arrays.asList("timestamp","fold_position","is_learning"));
 	
-	private StringBuffer pSb;
-	SocialVertica()
-	{
+	private static StringBuffer pSb;
+	static {
 		//Create insert string
 		pSb=new StringBuffer();
 		pSb.append("INSERT INTO public.HOURLY ( ");
@@ -72,37 +72,51 @@ public class SocialVertica {
 		pSb.append(")");
 		System.out.println(pSb.toString());
 	}
+	SocialVertica()
+	{
+
+	}
 	/**
-	 * This routine creates a prepared statement and binds variable values; The prepared statement
-	 * can be executed immediately.
-	 * @param con: Connection 
-	 * @return PreparedStatement: A prepared bound sql statement which can be executed.
+	 * This routine creates a prepared statement and binds multiple variable values, as represented by
+	 * distinct SocialVertica objects;Each SocialVeritca object will represent one FBAdgroup.
+	 * @param con; Connection object
+	 * @param sv; A list of Initialized SocialVertica objects
+	 * @return PreparedStatement: A prepared bound batched sql statement which can be executed.
 	 */
-	public PreparedStatement  generatePreparedStatement(Connection con)
+	public static PreparedStatement genBatchPrepareStmt(Connection con,ArrayList<SocialVertica> svl)
 	{
 		try
 		{
 			PreparedStatement pStmt = con.prepareStatement(pSb.toString());	
-			int varOrder=0;
-			for(String var:varBindOrder)
+			
+			for(SocialVertica sv:svl)
 			{
-				Field f=this.getClass().getField(var);
-				varOrder++;
-				Class<?> type = f.getType();
-				if(type==int.class)
+				int varOrder=0;
+				for(String var:varBindOrder)
 				{
-					pStmt.setInt(varOrder, f.getInt(this));
-				}else if(type==Double.class)
-				{
-					pStmt.setDouble(varOrder,f.getDouble(this));
-				}else if(type==Float.class)
-				{
-					pStmt.setFloat(varOrder,f.getFloat(this));
-				}else
-				{
-					System.out.println("Unknown type!");
-					return null;
+					Field f=sv.getClass().getField(var);
+					varOrder++;
+					Class<?> type = f.getType();
+					if(type==int.class)
+					{
+						pStmt.setInt(varOrder, f.getInt(sv));
+					}
+					else if(type==long.class)
+					{
+						pStmt.setLong(varOrder, f.getLong(sv));
+					}else if(type==Double.class)
+					{
+						pStmt.setDouble(varOrder,f.getDouble(sv));
+					}else if(type==Float.class)
+					{
+						pStmt.setFloat(varOrder,f.getFloat(sv));
+					}else
+					{
+						System.out.println("Unknown type!");
+						return null;
+					}
 				}
+				pStmt.addBatch();
 			}
 			return pStmt;
 		}catch(SQLException|NoSuchFieldException|IllegalAccessException ex)
